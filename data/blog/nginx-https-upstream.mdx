@@ -1,0 +1,115 @@
+---
+title: 'Nginx 反向代理 HTTPS 上游服务器'
+date: '2023-08-12'
+lastmod: '2023-08-12'
+tags: ['nginx', 'https', 'proxy']
+draft: false
+summary: '当上游服务器是 HTTPS 服务时，Nginx 反向代理需要做一些额外的配置。'
+images: []
+authors: ['default']
+---
+
+Nginx 进行反向代理时，如果后端提供的是 HTTP 服务，配置起来较为简单。
+
+```conf
+http {
+    server {
+        listen 80;
+        server_name example.com;
+        location / {
+            proxy_pass http://backend.example.com;
+        }
+    }
+}
+```
+
+但是如果后端是 HTTPS 服务，看似可以直接把 `proxy_pass` 的值改为 `https://backend.example.com`，但是这样的修改存在隐患。一般而言，我们使用 HTTPS 服务，就是为了保证数据传输的安全性，但是 Nginx 默认并不校验后端的证书，这种情况下所谓的 HTTPS 连接完全是掩耳盗铃。
+
+> Syntax:	proxy_ssl_verify on | off;  
+> Default:	  
+> proxy_ssl_verify off;  
+> Context:	http, server, location  
+> This directive appeared in version 1.7.0.  
+> Enables or disables verification of the proxied HTTPS server certificate.  
+
+可以看到，`proxy_ssl_verify` 默认是关闭的，我们需要手动开启。
+
+```conf
+http {
+    server {
+        listen 80;
+        server_name example.com;
+        location / {
+            proxy_pass https://backend.example.com;
+            proxy_ssl_verify on;
+        }
+    }
+}
+```
+
+如果证书是来自于公共 CA 的，这样的配置就可以了。但是如果是自签名证书，那么还需要配置 `proxy_ssl_trusted_certificate`。
+
+> Syntax:	proxy_ssl_trusted_certificate file;  
+> Default:	—  
+> Context:	http, server, location  
+> This directive appeared in version 1.7.0.  
+> Specifies a file with trusted CA certificates in the PEM format used to verify the certificate of the proxied HTTPS server.  
+
+所以现在配置文件变成了这样。
+
+```conf
+http {
+    server {
+        listen 80;
+        server_name example.com;
+        location / {
+            proxy_pass https://backend.example.com;
+            proxy_ssl_verify on;
+            proxy_ssl_trusted_certificate /path/to/ca.pem;
+        }
+    }
+}
+```
+
+看似已经很完美了，但是 Nginx 很坑的一点是，默认 SNI (Server Name Indication) 并没有开启。SNI 是 TLS 协议的一个扩展。简单来说，当一个主机同时运行多个域名的 HTTPS 服务时，它并不知道客户端请求的是哪个域名，因此可能返回不正确的证书。SNI 就是为了解决这一点。在 Nginx 中这个对应着 `proxy_ssl_server_name` 选项。
+
+> Syntax:	proxy_ssl_server_name on | off;  
+> Default:	  
+> proxy_ssl_server_name off;  
+> Context:	http, server, location  
+> This directive appeared in version 1.7.0.  
+> Enables or disables passing of the server name through TLS Server Name Indication extension (SNI, RFC 6066) when establishing a connection with the proxied HTTPS server.  
+
+现在我们加上 `proxy_ssl_server_name`，再加上作为反向代理服务器常见的一些配置，最后配置文件应该看起来像这样。
+
+```conf
+http {
+    server {
+        listen 80;
+        server_name example.com;
+        location / {
+            proxy_pass https://backend.example.com;
+            proxy_ssl_verify on;
+            proxy_ssl_session_reuse on; # 由于会不断与上游服务器建立 TLS 连接，开启这个选项可以提高性能
+            proxy_ssl_trusted_certificate /path/to/ca.pem;
+            proxy_ssl_server_name on;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for; 
+            proxy_redirect https://backend.example.com/ http://example.com/;
+        }
+    }
+}
+```
+
+注意，这样配置只会验证上游服务器的证书，上游服务器并不会验证代理服务器的身份。如果你需要 TLS 双向认证，可以参考[这篇官方文档](https://docs.nginx.com/nginx/admin-guide/security-controls/securing-http-traffic-upstream/)。
+
+同时为了便于理解，这里假设到代理服务器的流量都是 HTTP 的，如果是 HTTPS 流量，那么还需要配置 `proxy_ssl_certificate` 和 `proxy_ssl_certificate_key`，并且监听 443 端口。
+
+
+
+
+## 参考资料
+
+1. [Securing HTTP Traffic to Upstream Servers](https://docs.nginx.com/nginx/admin-guide/security-controls/securing-http-traffic-upstream/)
+2. [Module ngx_http_proxy_module](https://nginx.org/en/docs/http/ngx_http_proxy_module.html)
+3. [什么是SNI？TLS服务器名称指示如何工作](https://www.cloudflare.com/zh-cn/learning/ssl/what-is-sni/)

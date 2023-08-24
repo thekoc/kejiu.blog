@@ -1,0 +1,38 @@
+---
+title: 'Matplotlib 基本概念'
+date: '2023-08-12'
+lastmod: '2023-08-12'
+tags: ['matplotlib', 'python']
+draft: false
+summary: ''
+images: ['/static/images/canada/mountains.jpg', '/static/images/canada/toronto.jpg']
+authors: ['default']
+---
+## 总览
+为了方便用户操作, matplotlib 被分为几个抽象层.
+
+其中最高的一层是 matplotlib.pyplot 模块. 这个模块通过将面向对象的接口进行封装, 提供了最接近于 matlab 的接口. 即使看起来是命令式操作, 底层仍是在对 figure, axes, axis 等对象进行操作 (下文将详细解释). 在日常使用中很方便. 但是如果要制作 GUI 程序, 就不十分适用了.
+
+为了能在不同平台, 应用中使用, matplotlib 有一个专门的后端 (backend) 程序来负责把图像画在屏幕上. 
+通过 `matplotlib.use('PS')   # generate postscript output by default` 显式调用.
+
+## 对象
+![Parts of a Figure](http://matplotlib.org/_images/fig_map.png)
+
+### Figure
+Figure 可以理解为一个窗口. 一个 Figure 包含着一个图像的所有内容, 甚至可以同时包含几个子图.
+
+### Axes
+Axes 可以理解为一个图像, 是一幅包含数据的图像. 其也负责管理数据范围 (`set_xlim()`, `set_ylim`), 坐标轴标签 (`set_xlabel()`, `set_ylabel()`) 标题 (`set_title`) 等事宜. 多个 Axes 可以被一个 Figure 包含, 但是一个 Axes 不能被多个 Figure 包含.
+
+### Axis
+Axis 代表 Axes 中的坐标轴. 可以设置刻度的标签以及坐标轴的位置.
+
+### Artist
+几乎所有出现在 Figure 中的都是一个 Artist. Artist 负责把图像画在 Canvas 上.
+
+## pyplot 和 pylab 的关系
+pyplot 是一个方便用户使用的命令风格的接口，它永远有一个“当前”的`figure`和`axes`，并对它们进行操作。而`pylab`则是被废弃的接口（由于与`numpy`在同一命名空间时会产生的冲突）
+
+-----
+http://matplotlib.org/faq/usage_faq.html#parts-of-a-figure

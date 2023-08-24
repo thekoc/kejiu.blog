@@ -1,0 +1,161 @@
+---
+title: '通过 GitHub Actions 自动化部署宇宙万物'
+date: '2023-08-24'
+tags: ['git', 'github', 'devops', 'automation']
+summary: '如果你在也在使用 Github，那么你可以通过 Github Actions 来实现自动化部署。'
+images: []
+authors: ['default']
+draft: false
+---
+
+## GitHub Actions 何者也
+
+让我们先看看官方的说法：
+
+> GitHub Actions 是一种持续集成和持续交付 (CI/CD) 平台，可用于自动执行生成、测试和部署管道。 您可以创建工作流程来构建和测试存储库的每个拉取请求，或将合并的拉取请求部署到生产环境。
+
+听起来好像不太像人话，简单来说就是 GitHub Actions 可以监听 GitHub 上发生的事件并且自动执行用户预先设定的操作。
+
+例如：当你提交代码到 GitHub 时，GitHub Actions 就自动帮你运行测试，当测试失败，就给你发送一封邮件。
+
+![](https://docs.github.com/assets/cb-25535/mw-1440/images/help/actions/overview-actions-simple.webp)
+
+当然，更多时候还是用于自动化部署/测试/打包等。
+
+基于这个基本流程，GitHub Actions 还扩展了很多其他的功能，例如矩阵构建（Matrix builds），实时日志，容器化构建，和众多云服务厂商的集成等等。详细内容可以通过 Github 的[官方文档](https://docs.github.com/en/actions) 来了解。
+
+既然要自动执行操作，那么肯定就要有一台 24 小时运行的机器或者虚拟化容器。于是问题来了，运行机器的这笔钱谁来出？好消息是，对于所有公开的仓库，GitHub Actions 都是免费的（当然，有一些限制），对于私有仓库，每月有 2000 分钟的免费额度，超过部分按量收费。
+
+免费使用的限制如下表[^1]：
+
+| GitHub plan | Total concurrent jobs | Maximum concurrent macOS jobs |
+| :---------- | :-------------------- | :---------------------------- |
+| Free        | 20                    | 5                             |
+| Pro         | 40                    | 5                             |
+| Team        | 60                    | 5                             |
+| Enterprise  | 500                   | 50                            |
+
+[^1]: 限制额度可能会发生变化，参考[官方文档](https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions#usage-limits)。
+
+## 基本使用
+
+由于和 Github 深度集成，GitHub Actions 用起来非常方便，只需要在仓库的 `.github/workflows` 目录下创建一个 `*.yml` 文件就会开始监听事件。
+
+例如我们在仓库的路径`.github/workflows/hello-world.yml`创建一个最基础的 `workflow`。
+```yml
+name: GitHub Actions Demo
+run-name: Hello world from ${{ github.actor }}
+on: [push]
+jobs:
+  Hello-World-Action:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Hello world on OS ${{ runner.os }}"
+      - run: echo "Triggered by ${{ github.event_name }} event."
+      - run: echo "Exit with status ${{ job.status }}."
+```
+
+只要把它放在仓库里，在每次 push 时这个 Workflow 就会触发，我们可以在仓库的 Actions 页面看到它的的运行情况。
+
+![github-actions-example](/static/images/github-actions-example.png)
+
+其实可以发现，Github Actions 的一些功能和 Jenkins 等部署系统很像，这里简单对比一下。
+
+| 方面             | Github Actions                         | Jenkins                                        |
+| ---------------- | -------------------------------------- | ---------------------------------------------- |
+| **主体**         | 由GitHub官方提供的CI/CD工具            | 开源社区维护的持续集成和持续部署工具。         |
+| **安装部署**     | 无需安装。也提供自建服务器的功能。     | 需要独立安装并在服务器上配置。                 |
+| **价格**         | 公共仓库免费的，私有仓库有分钟数限制。 | 完全免费，但有额外硬件成本。                   |
+| **平台支持**     | 支持各种主流操作系统和平台。           | 可以在任何支持Java的平台上运行                 |
+| **UI和用户体验** | 现代化的UI，与GitHub深度集成。         | UI相对较老，但功能强大，可能需要一些学习曲线。 |
+
+## 概念解释
+### [Workflows](https://docs.github.com/en/actions/using-workflows)
+
+一个 `workflow` 就是一个自动化任务的整个流程，它由一个或多个 `job` 组成，由 `event` 触发。`workflow` 也可以包含其他的 `workflow`。要创建一个 `workflow`，只需在仓库的 `.github/workflows` 目录下新建一个 `*.yml` 文件。
+
+### [Events](https://docs.github.com/en/actions/using-workflows/events-that-trigger-workflows)
+
+一个 `event` 就是能够触发 `workflow` 的事件。一般是对仓库进行某些操作，例如 push，pull request，issue。但是也可以通过官方的 [REST API](https://docs.github.com/en/rest/repos#create-a-repository-dispatch-event) 来手动触发。
+
+
+### [Jobs](https://docs.github.com/en/actions/using-jobs)
+
+一个 `job` 就是 `workflow` 的一个步骤，它由一系列的 `step` 组成。这些 `step` 都是在同一个 `runner` 上运行，所以互相之间可以共享数据。
+
+你可以把一系列 `step` 想象成在同一台机器上顺序执行的命令，你也可以使用其他人写好的 `action` 来作为 `step`，例如：
+
+```yml
+name: GitHub Actions Demo
+run-name: Example workflow using an action
+on: [push]
+jobs:
+  Example-Action:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: '12'
+      - run: npm install
+      - run: npm test
+```
+
+这个 `workflow` 会在每次 push 时触发，然后在 `ubuntu-latest` 上运行一系列 `step`，这些 `step` 都是使用其他人写好的 `action` `actions/checkout@v3` 会把仓库的代码检出到 `ubuntu-latest` 上。`actions/setup-node@v3` 则会安装 `node` 环境。
+
+默认情况下，同一个 `workflow` 的 `job` 是并行执行的，但是也可以互相设置依赖来线性执行，如：
+```yml
+jobs:
+  job1:
+  job2:
+    needs: job1
+  job3:
+    needs: [job1, job2]
+```
+
+### [Actions](https://docs.github.com/en/actions/creating-actions)
+
+一个 `action` 是一系列动作的合集，例如上文的 `actions/checkout@v3` 和 `actions/setup-node@v3` 就是两个 `action`。一般对于常用的操作，我们可以直接使用其他人写好的 `action`，也可以自己创建 `action`。
+
+在官方提供的 [marketplace](https://github.com/marketplace?type=actions) 上可以查看编写好的 `action`。
+
+![Marketplace](/static/images/github-actions-marketplace.png)
+
+
+### [Runners](https://docs.github.com/en/actions/using-github-hosted-runners/about-github-hosted-runners)
+
+一个 `runner` 就是运行 `workflow` 的机器（估计是一个虚拟容器），每次 `workflow` 都会在一个新的 `runner` 上运行。GitHub 官方提供了不同系统下的 `runner`，通过 `runs-on` 来指定。
+
+```yml
+jobs:
+  job1:
+    runs-on: ubuntu-latest
+  job2:
+    runs-on: windows-latest
+  job3:
+    runs-on: macos-latest
+```
+
+默认的 `runner` 配置如下[^2]：
+
+[^2]: 具体配置可能会发生变化，参考[官方文档](https://docs.github.com/en/actions/using-github-hosted-runners/about-github-hosted-runners#supported-runners-and-hardware-resources)。
+
+| Type | CPU | Memory | SSD |
+| :--- | :-- | :----- | :-- |
+| Windows | 2-core | 7 GB | 14 GB |
+| Linux | 2-core | 7 GB | 14 GB |
+| macOS | 3-core | 14 GB | 14 GB |
+
+如果你需要更高的配置，可以使用官方提供的 [larger runner](https://docs.github.com/en/actions/using-github-hosted-runners/about-larger-runners#understanding-billing)，最高提供 64 核，256 GB， 2040 GB SSD 的 Windows 和 Ubuntu 配置，但是需要额外付费。 
+
+官方也提供了[自建 runner](https://docs.github.com/en/actions/hosting-your-own-runners/managing-self-hosted-runners/about-self-hosted-runners) 的功能，不过我比较怀疑如果都走到这一步了，它和传统的自动构建工具相比还有多大优势。
+
+## 总结
+
+GiHub Actions 是一个和 GitHub 深度集成的自动化部署工具，可以很方便的监听 GitHub 事件并执行操作。最重要的一点是它是免费的，而且背后是微软在撑腰，不用太担心会突然关闭。
+
+其实 GitHub Actions 也是现在 Serverless 大趋势的一个缩影，云厂商越来越倾向于提供具体的应用，而不是整机。对于云厂商来说这可以方便他们进行权限管理，资源分配和规模化，也能帮助他们提高机器利用率，降低成本。对于用户来说，也可以更加专注于自己的业务，而不用关心底层的资源管理。代价就是会更多的依赖于云厂商提供的商业服务，而不是更开放的底层服务。也不知道这是好事还是坏事。
+
+## 参考链接
+1. [GitHub Actions - Git Docs](https://docs.github.com/en/actions)
+2. [Jenkin 官方网站](https://www.jenkins.io)
