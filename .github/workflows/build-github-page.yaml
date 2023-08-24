@@ -20,15 +20,23 @@ jobs:
         uses: borales/actions-yarn@v4
         with:
           cmd: install # will run `yarn install` command
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }} # if needed
       - name: Build production bundle
         uses: borales/actions-yarn@v4
         with:
           cmd: build
+        env:
+          PWD: ${{ github.workspace }}
       
       - name: Add .nojekyll
         run: touch ./out/.nojekyll
       
       - name: List file for debug
         run: ls -al ./out
+
+      - name: Deploy
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          deploy_key: ${{ secrets.PAGE_DEPLOY_KEY }}
+          external_repository: thekoc/thekoc.github.io
+          publish_branch: main
+          publish_dir: ./out
