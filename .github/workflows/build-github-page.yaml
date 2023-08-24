@@ -16,23 +16,27 @@ jobs:
         with:
           node-version: 16.x
           cache: yarn
+      
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+      
+      - name: Build
+        run: yarn build
 
-      - name: Run install
-        uses: borales/actions-yarn@v4
-        with:
-          cmd: install # will run `yarn install` command
-      - name: Build production bundle
-        uses: borales/actions-yarn@v4
-        with:
-          cmd: build
-        env:
-          PWD: ${{ github.workspace }}
+      # - name: Run install
+      #   uses: borales/actions-yarn@v4
+      #   with:
+      #     cmd: install # will run `yarn install` command
+      # - name: Build production bundle
+      #   uses: borales/actions-yarn@v4
+      #   with:
+      #     cmd: build
+      #   env:
+      #     PWD: ${{ github.workspace }}
       
       - name: Add .nojekyll
         run: touch ./out/.nojekyll
       
-      - name: List file for debug
-        run: ls -al ./out
 
       - name: Deploy
         uses: peaceiris/actions-gh-pages@v3
