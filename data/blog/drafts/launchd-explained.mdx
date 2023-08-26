@@ -11,25 +11,27 @@ authors: ['default']
 
 之前用过几次 launchd 来管理一些后台程序，似乎可以运行，却不始终求甚解。心中也一直还有些疑问，比如 launchd, crontab，systemd 是什么关系？它接受哪些命令，起什么作用？配置文件到底怎么写，有哪些选项？
 
-最近恰好较为全面地了解了一下 ，在此处纪录一下。
+最近恰好较为全面地了解了一下 ，就在此记录一下。
 
 ## launchd 到底是什么? 
 
-简单来说，launchd 是一个 macOS 上的后台服务管理进程。例如键盘监听，文件系统，驱动程序，iCloud同步等等等服务都是由他启动和管理的。但是它不仅仅是一个后台服务管理进程（类比 Supervisord 和 Crontab），它是一个 init 程序，是系统启动后运行的第一个进程（PID 为 1），因此也就在系统中有着特殊的地位。如今 Linux 系统中较为流行的 init 程序 systemd 也是受到 launchd 启发而设计的。
+简单来说，launchd 是一个 macOS 上的后台服务管理进程。例如网络进程，文件系统，Finder等等都是由它来启动和管理的。并且它不仅仅是一个后台服务管理进程（如 Supervisord 和 Crontab），它还是一个 init 程序，是系统启动后运行的第个进程（PID 为 1），因此也就在系统中有着特殊的地位。如今 Linux 系统中较流行的 init 程序 systemd 受到过  launchd 的启发。
 
-作为一个系统级进程，它本身不会带来什么性能损耗，还有着非常强大的功能和配置选项。唯一的缺点就是——有些复杂。XML 格式的配置文件，繁杂的功能项（三十多项可选配置），再加上官方在 2016 年左右重写了 launchctl，更改了一些用户接口，这都在增加 launchd 的理解难度。
+作为一个系统级进程，本身它不会带来什么性能损耗，却着非常强大的功能和配置选项。唯一的缺点就是——有些复杂。繁杂的功能项，XML 格式的配置文件（我**太爱** XML 了，只可惜 systemd 的配置文件没有用这个格式），官方 2016 年对旧命令的更改，都增加了它的理解难度。
 
-除了这个“小小”的缺点外，可以说launchd 是居家旅行必备程序了。
+除了这个“小小”的缺点外，可以说launchd 是居家旅行，必备工具了。
 
 ## 基本概念
 
-简单来说，launchd 会在启动时扫描特定的文件夹，读取相应的配置文件，根据当前的上下文，决定是否需要立即启动，以什么权限启动，并且将这些程序纳入自己的管理范围。这些都是开机后自动完成的。
+简单来说，launchd 会在启动时扫描特定的路径，读取其中的配置文件，再决定是否需要启动对应的程序，并且将这些程序纳入自己的管理范围。这些过程用户不需要操心，因为是系统开机时自动完成的。
 
-作为用户，如果我们想和 launchd 交互，例如禁用或者启用某些服务，或者查看当前正在运行的服务等，就需要用到 launchctl 这个命令行工具。而如果我们想创建自己的后台服务程序，就需要自行编写配置文件，根据使用目的将它放置在正确的路径中。
+作为用户，如果我们想禁用或者启用某些服务，或者查看正在运行的服务等，就需要用到 launchctl 这个命令行工具。
+
+如果我们想创建自己的后台服务程序，就需要编写配置文件，并且将它放置在特定的路径中。
 
 ## 启动步骤
 
-为了便于理解，一个不太准确的 launchd 启动步骤是这样的：
+为了便于理解，一个不是 100% 准确的 launchd 启动步骤是这样的：
 
 1. 机器开机，内核启动。
 2. 内核加载 launchd。
@@ -37,19 +39,20 @@ authors: ['default']
 4. 启动用户登录窗口（也就是我们输入密码的页面）。
 5. 用户通过图形页面登录系统。
 6. launchd 读取 `/System/Library/LaunchAgents`，`/Library/LaunchAgents`和 `~/Library/LaunchAgents` 中的配置文件，并且启动满足条件的进程。
-7. 用户使用过程中，手动输入 `launchctl load` 命令（已被标记为废弃，下文详细讨论）让 launchd 主动加载配置文件。
+7. 用户使登录后，也可以手动输入命令让 launchd 加载配置文件。
 
-## 配置文件解析
+## 配置文件格式
 
 配置文件是一个以 `.plist` 结尾的文件，我们通过配置文件来告诉 launchd 程序何时启动，启动后做些什么。
 
-配置文件的格式和参数近年来发生了一些改变，所以网络上（甚至官方）曾经的教程都会有不准确的地方。所幸 macOS 系统自带了及时更新的[文档](x-man-page://launchd.plist)，其中详细描述了配置文件可选的各种值以及作用。你可以通过在命令行中输入 `man launchd.plist` 来查看。
+配置文件的格式和参数近年来发生了一些改变，所以网络上（包括官方提供的）教程都会有不准确的地方。所幸 macOS 系统自带了及时更新的[操作手册](x-man-page://launchd.plist)，你可以在命令行中输入 `man launchd.plist` 来查看。
+
 ![](/static/images/man-launchd-plist.png)
 
 
-### 存放位置
+### 存放路径
 
-以下表格说明了存放在不同位置中的配置文件的区别。
+配置文件可以存放在以下位置，区别如下：
 
 |文件夹|用途|
 |---|---|
@@ -59,9 +62,9 @@ authors: ['default']
 |/资源库/LaunchAgents|基于每个用户且所有用户适用的第三方代理|
 |~/资源库/LaunchAgents|仅适用于登录用户的第三方代理|
 
-### 基本结构
+### 配置文件基本格式
 
-下面是一个示例：
+下面是一个简单的例子：
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -87,7 +90,7 @@ authors: ['default']
 2. `ProgramArguments`  程序的路径和参数。
 3. `StartInterval` 程序重复运行的间隔。
 
-这个例子中，程序标识符为 `com.example.touchsomefile`，运行的命令为 `touch /tmp/helloworld`，每隔 `300` 秒便会执行一次。
+比如在例子中，程序标识符为 `com.example.touchsomefile`，运行的命令为 `touch /tmp/helloworld`，每隔 `300` 秒便会执行一次。
 
 ### KeepAlive
 
@@ -97,9 +100,11 @@ authors: ['default']
 <true/>
 ```
 
-当你的程序退出后，launchd 会自动重新启动。默认情况下重启的间隔不能少于 10 秒，这个间隔可以用 `ThrottleInterval` 键去修改。
+程序退出后，launchd 会自动重新启动该程序。默认情况下重启的间隔不能少于 10 秒，这个值可以通过 `ThrottleInterval` 键来修改。
 
-`KeepAlive` 除了 `true` 以外，还可以设置为很多值，例如 `SuccessfulExit`, `PathState`, `OtherJobEnabled` 等。注意 `NetworkState` 现在已经被废弃。详细的讨论可参考官方说明。
+`KeepAlive` 除了 `true` 以外，还可以设置为很多值，例如 `SuccessfulExit`, `PathState`, `OtherJobEnabled` 等。`NetworkState` 现在已经被废弃。详细情况可查看操作手册。
+
+
 ### 日历时间
 
 类似 Crontab，launchd 也可以配置程序按照日历时间来运行，例如每周一下午三点。只需要把 `StartInterval` 更改成 `StartCalendarInterval` 即可。
@@ -121,11 +126,11 @@ authors: ['default']
 
 ```
 
-不是所有键都必须填写，例如把 `Hour` 键去掉，就等同于 Crontab 中的通配符 (`*`），在满足其他条件的前提下每小时都会运行一次。
+`StartCalendarInterval` 中不是所有键都必须填写，例如把 `Hour` 键去掉，就等同于 Crontab 中的通配符 (`*`)，在其他条件满足的前提下每小时都会运行一次。
 
 ### 监听文件变化
 
-除了按照时间间隔和日历外，launchd 也支持监听文件变化，例如加入`WatchPaths` 这个键后：
+除了按照时间间隔和日历外，launchd 也支持监听文件变化，`WatchPaths` 键：
 ```xml
     <key>WatchPaths</key>
     <array>
@@ -133,11 +138,11 @@ authors: ['default']
     </array>
 ```
 
-程序便会在此文件发生变化后启动。
+加入后，当 `/etc/hostconfig` 文件发生变化时，launchd 会启动程序。
 
 ### 其他启动条件
 
-launchd 还支持很多其他启动条件，有兴趣可以查看官方[相关文档](https://developer.apple.com/library/archive/technotes/tn2083/_index.html#//apple_ref/doc/uid/DTS10003794-CH1-SUBSECTION37)。
+launchd 还支持很多其他启动条件，有兴趣可以查看[官方文档](https://developer.apple.com/library/archive/technotes/tn2083/_index.html#//apple_ref/doc/uid/DTS10003794-CH1-SUBSECTION37)。
 
 |Criterion|Property List Key|Introduced|
 |---|---|---|
@@ -182,11 +187,12 @@ launchd 还支持很多其他启动条件，有兴趣可以查看官方[相关�
 
 ### 其他配置
 
-此外，也通过 `UserName` 或者 `UID` 来指定运行程序的用户（注意，这可能会涉及到权限问题）。通过 `WorkingDirectory` 来配置工作目录。通过 `RootDirectory` 来配置根目录。由于篇幅本章不详细展开，请查阅官方的 Mannual 文档。
+此外，也通过 `UserName` 或者 `UID` 来指定运行程序的用户（注意，这可能会涉及到权限问题）。通过 `WorkingDirectory` 来配置工作目录。通过 `RootDirectory` 来配置根目录。还有三十多项其他配置，本章就不详细展开了。
+
 
 ## Launchctl
 
-虽然刚刚一直在说 launchd，实际上和我们打交道其实是命令行工具 `launchctl`，它们就像 Linux 中的 systemd 和 systemctl，一个是后端程序，一个是用户用来和后端交互的前端命令行页面。比如，launchd 负责管理后台进程，如果我们要手动禁止/启用/重启/查看后台进程，就需要用到 `launchctl` 命令了。
+ `launchctl` 是直接和我们打交道的命令行工具，`launchd` 和 `launchctl` 就像 Linux 中的 `systemd` 和 `systemctl`，一个是后端程序，一个是用户用来和后端交互的命令行程序。`launchd` 负责实际管理后台进程，`launchctl` 则让我们可以手动禁止/启用/重启/查看后台进程。
 
 ### 旧方法 vs 新方法
 在 2016 年左右大幅改动了 launchd 的命令，原来的命令
@@ -201,27 +207,27 @@ launchd 还支持很多其他启动条件，有兴趣可以查看官方[相关�
     launchctl bootstrap <domian-target> <plist-file-path>
 ```
 
-苹果为什么要做出这个改变？其实就是为了这个新加入的参数 `<domain-target>`。
+为什么要做出这个改变呢？其实就是为了这个新加入的参数 `<domain-target>`。
 
-在 macOS 中，运行的程序有“域”（domain）的概念。域其实就是程序运行的一个命名空间，主要用来管理权限还有隔离程序。
+在 macOS 中，运行的程序有“域”（domain）的概念。域其实就是程序运行的一个命名空间，可以用作权限管理还有程序命名空间隔离。
 
-例如，如果我们在 `/Library/LaunchAgents` 中创建了一个任务，那么每个用户登录时，这个进程应该启动。用户登出后，相应的进程应该关闭。但是如果是系统级别的后台进程，则应该在系统启动时启动，并且不会随着用户登出关闭。如果没有命名空间的话，这些不同的情况管理起来是十分困难的。因此，对于系统级应用，苹果引入了 `system` 这个域，对于通过图形页面登录的用户，后台进程则运行在 `gui` 域中。
+如果是系统级别的后台进程，则应该在系统启动时启动，并且不会随着用户登出关闭。但是用户级别的后台进程，例如大家都很熟悉的 Dock （屏幕下方的程序坞），则是每个登录的用户都有一个属于自己的实例。并且在登出后也会对应关闭。如果没有命名空间的话，同样名字的 Dock 程序可能会互相冲突。因此，根据用户 ID 不通，不同的 Dock 实例运行在不同的 `gui/<uid>` 域中。而系统级的进程则在 `system` 域中。
 
 
-在普通的流程中，运行在哪个域中是系统在启动过程中自动管理的，但是由于 `launchctl load` 命令的存在，用户可以在系统已经启动后手动载入。这个时候问题就出现了，当用户运行 `launchctl load` 命令时，到底应该载入到哪个域中？之前的方法是，用户在哪个域中执行的改命令，就载入到哪个域中，如果用户用 `sudo` 命令载入的话，就在 `system` 中运行。但是如果我用 A 用户登录，却想载入到 B 用户的域中呢？或者如果我用图形页面登录，却想载入到 `ssh` 的域中呢？
+一般的流程中，运行在哪个域中是系统在启动过程中自动决定的，但是由于 `launchctl load` 命令的存在，用户可以在系统启动完成后再手动载入。这个时候问题就出现了，当用户运行 `launchctl load` 命令时，到底应该载入到哪个域中？之前的方法是，用户在哪个域中执行的改命令，就载入到哪个域中，如果用户用 `sudo` 命令载入的话，就在 `system` 中运行。但是如果我用 A 用户登录，却想载入到 B 用户的域中呢？或者如果我用图形页面登录，却想载入到 `ssh` 的域中呢？
 
 
 ### `launchctl bootstrap` 命令
 
-旧命令 `launchctl load` 是无法主动指定的，如果使用新命令 `launchctl bootstrap`，就可以在参数 `domain-target` 中指定。`man` 文档中列出了五个域，分别是 `system`, `gui`, `login`, `user` 和 `pid`。除了这些以外，还存在别的域，但是实际上我们日常使用的只有 `system` 和 `gui`，最多加上 `user`。
+旧命令 `launchctl load` 无法主动指定加载的域，但如果使用新命令 `launchctl bootstrap`，就可以在参数 `domain-target` 中指定。操作手册中中列出了五个域，分别是 `system`, `gui`, `login`, `user` 和 `pid`。除了这些以外，还存在别的域，但是实际上我们日常使用最多的只有 `system` 和 `gui/<uid>`，可能还有 `user/<uid>`。
 
-例如，如果我们要把载入到当前用户的域中，可以使用
+例如，如果我们要把载入到当前登录用户的域中，可以使用
 
 ```bash
     launchctl bootstrap gui/$(id -u) <plist-file-path>
 ```
 
-其中 `$(id -u)` 用来获取当前用户的 UID。gui 代表图形页面。
+其中gui 代表图形页面，`$(id -u)` 则用来获取当前用户的 UID。
 
 
 如果要载入到系统域中，则可以使用：
@@ -280,7 +286,9 @@ launchd 还支持很多其他启动条件，有兴趣可以查看官方[相关�
     launchctl kickstart -k <domain-target>/<service-id>
 ```
 
-·
+## 总结
+
+launchd 和 launchctl 常见的用法就是这些了。由于这两个组件实在是太过复杂，还有很多用法和细节没有提及，这些可以参考系统内置的 `man` 页面。如果你想更深入了解系统的底层架构，下面有一些官方参考资料从系统层面做了一些较深入的解释。
 
 ## 参考资料
 1. [Man Page](https://ss64.com/osx/launchctl.html)
