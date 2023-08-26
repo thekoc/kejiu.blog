@@ -1,0 +1,104 @@
+---
+title: 'Numpy 基本用法'
+date: '2019-6-10'
+summary: '本文简单总结了一下 Numpy 的基本用法'
+images: []
+authors: ['default']
+tags: ['python', 'numpy']
+---
+
+## 基本概念
+
+```python
+import numpy as np
+```
+
+在NumPy中，基本的对象是`ndarray`，一般用函数`np.array`来生成此种对象。
+
+```python
+type(np.array([1])) == np.ndarray
+# True
+```
+
+Numpy中，维度被称为*axes*，例如`[1, 2, 1]`这样一个数组有一个*axis*，这个*axis*有三个元素，所以我们说这个*axis*的长度为3。而下面这个数组：
+
+```python
+[[ 1., 0., 0.],
+ [ 0., 1., 2.]]
+```
+
+有两个*axis*，第一个的长度为2（因为里面有2个子数组），第二个的长度为3（因为每个子数组的元素个数为3）。
+用图像表示就是这样：
+![numpy basic](/static/images/numpy-basic.jpg)
+拿二维的数组来举例的话，第一个*axis*代表的就是行，第二个代表的就是列。第一个*axis*的长度就是行的长度，也就是该二维数组有几行，第二个*axis*的长度则代表该数组有几列。
+
+一个`ndarray`对象有几个基本属性
+
+- `ndarray.ndim`：数组有几个*axes*（也就是数组的维数）。
+- `ndarray.shape`：每个*axis*的长度，例如一个n × m的二维数组的`shape`为`(n, m)`。
+- `ndarray.size`：总共的元素数量，等于`shape`的每个分量相乘。
+- `ndarray.dtype`：数组中元素的类型。
+- `ndarray.itemsize`：数组中元素所占的大小。
+- `ndarray.data`：数组中元素所在的缓存，一般不需要访问和操 创建纵这一项。
+
+## 创建数组
+
+```python
+# 通过python内置的数组对象创建数组
+a = np.array([2, 3, 4])
+b = np.array([(1.5,2,3), (4,5,6)])
+
+# 显式\ud83c指定数组类型
+c = np.array([ [1,2], [3,4] ], dtype=complex)
+# array([[ 1.+0.j,  2.+0.j],
+#        [ 3.+0.j,  4.+0.j]])
+```
+
+也可以给数组的元素赋予初始值
+
+```python
+>>> np.zeros( (3,4) )
+array([[ 0.,  0.,  0.,  0.],
+       [ 0.,  0.,  0.,  0.],
+       [ 0.,  0.,  0.,  0.]])
+>>> np.ones( (2,3,4), dtype=np.int16 )   # dtype can also be specified
+array([[[ 1, 1, 1, 1],
+        [ 1, 1, 1, 1],
+        [ 1, 1, 1, 1]],
+       [[ 1, 1, 1, 1],
+        [ 1, 1, 1, 1],
+        [ 1, 1, 1, 1]]], dtype=int16)
+>>> np.empty( (2,3) )                                 # uninitialized, output may vary
+array([[  3.73603959e-262,   6.02658058e-154,   6.55490914e-260],
+       [  5.30498948e-313,   3.14673309e-307,   1.00000000e+000]])
+```
+
+如果想要生成一系列连续增长的数组的话，可以用`arange`或者`linspace`。
+
+- `np.arange`：参数分别为起始，结束，步长。注意由于浮点数的精度问题，想要生成固定数量的浮点数数组最好用`linspace`方法。
+- `np.linspace`：参数分别为起始，结束，均分的元素个数。
+
+## 操作数组
+
+### 操作元素
+
+对数组的操作默认是对每个元素分别进行，例子：
+
+```python
+>>> a = np.array( [20,30,40,50] )
+>>> b = np.arange( 4 )
+>>> b
+array([0, 1, 2, 3])
+>>> c = a-b
+>>> c
+array([20, 29, 38, 47])
+>>> b**2
+array([0, 1, 4, 9])
+>>> 10*np.sin(a)
+array([ 9.12945251, -9.88031624,  7.4511316 , -2.62374854])
+>>> a<35
+array([ True, True, False, False])
+```
+
+数组之间的点乘为`A * B`，矩阵乘法为`A @ B`（python >= 3.5）或者`A.dot(B)`。`+=`和`-=`运算符为原地替换数组。
+对数组的所有元素的操作

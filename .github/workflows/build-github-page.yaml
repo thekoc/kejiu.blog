@@ -1,0 +1,49 @@
+# github workflow
+# yarn build for github page
+
+
+name: Build and Deploy to Github Pages
+on: [push]
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+
+      - uses: actions/checkout@v3
+
+      - name: Rename data/blog/*.md  to *.mdx
+        run: |
+          find data/blog -name "*.md" -exec bash -c 'mv "$1" "${1%.md}.mdx"' - '{}' \;
+
+      - name: Set Node.js 16.x
+        uses: actions/setup-node@v3
+        with:
+          node-version: 16.x
+          cache: 'yarn'
+      
+      - name: Restore cache
+        uses: actions/cache@v3
+        with:
+          path: |
+            .next/cache
+          # Generate a new cache whenever packages or source files change.
+          key: ${{ runner.os }}-nextjs-${{ hashFiles('**/package-lock.json', '**/yarn.lock') }}-${{ hashFiles('**.[jt]s', '**.[jt]sx') }}
+          # If source files changed but packages didn't, rebuild from a prior cache.
+          restore-keys: |
+            ${{ runner.os }}-nextjs-${{ hashFiles('**/package-lock.json', '**/yarn.lock') }}-
+      
+      - name: Install dependencies
+        run: yarn install --immutable
+      - name: Build
+        run: yarn build
+
+      - name: Add .nojekyll
+        run: touch ./out/.nojekyll
+
+      - name: Deploy to Github Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          deploy_key: ${{ secrets.ACTIONS_DEPLOY_KEY }}
+          external_repository: thekoc/thekoc.github.io
+          publish_branch: main
+          publish_dir: ./out

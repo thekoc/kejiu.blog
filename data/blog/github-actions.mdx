@@ -1,0 +1,239 @@
+---
+title: '通过 GitHub Actions 自动化部署宇宙万物'
+date: '2023-08-24'
+summary: '如果你在也在使用 Github，那么你应该看看 Github Actions。'
+images: []
+authors: ['default']
+tags: ['git', 'github', 'devops', 'automation']
+---
+
+## GitHub Actions 何者也
+
+让我们先看看官方的说法：
+
+> GitHub Actions 是一种持续集成和持续交付 (CI/CD) 平台，可用于自动执行生成、测试和部署管道。 您可以创建工作流程来构建和测试存储库的每个拉取请求，或将合并的拉取请求部署到生产环境。
+
+这听起来好像不太像人话，简单来说就是 GitHub Actions 可以监听 GitHub 上发生的事件并自动执行用户设定的操作。
+
+例如：当你提交代码到 GitHub 时，GitHub Actions 就自动帮你运行测试，如果测试失败，就给你发送一封邮件。
+
+请注意，在这里你可以根据事件来执行**任意**的命令，虽然 GitHub 提供给你的是一个虚拟容器，但是在使用时，你可以把它当作一台全功能的主机。也就是说你可以用它来部署任何框架，任何语言。据说甚至还有有人尝试利用 GitHub Actions 来挖矿。
+
+虽然（不出意外的）官方不建议这种用法，但是这也说明了 GitHub Actions 的无限可能性。
+
+
+![](https://docs.github.com/assets/cb-25535/mw-1440/images/help/actions/overview-actions-simple.webp)
+
+
+GitHub Actions 基于此还扩展了许多其他的功能，例如矩阵构建（Matrix builds），实时日志，容器化构建，第三方云服务厂商集成等等。详细内容可以通过 Github 的[官方文档](https://docs.github.com/en/actions) 来了解。
+
+问题来了，既然要部署宇宙万物，那么肯定就要有一台机器或者虚拟化容器 24 小时不间断运行 —— 这笔钱谁来出？好消息是，对于所有公开的仓库，GitHub Actions 都是免费的（有一些限制），对于私有仓库，每月有 2000 分钟的免费额度，超过部分按量收费。
+
+免费使用的限制如下表[^1]：
+
+| GitHub plan | Total concurrent jobs | Maximum concurrent macOS jobs |
+| :---------- | :-------------------- | :---------------------------- |
+| Free        | 20                    | 5                             |
+| Pro         | 40                    | 5                             |
+| Team        | 60                    | 5                             |
+| Enterprise  | 500                   | 50                            |
+
+对于个人开发者来说，这个限制应该是远远够用的。
+
+[^1]: 限制额度可能会发生变化，参考[官方文档](https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions#usage-limits)。
+
+## 基本使用
+
+由于和 Github 深度集成，GitHub Actions 用起来非常方便，只需要在仓库的 `.github/workflows` 目录下创建一个 `*.yml` 配置文件就大功告成，GitHub 会自动启动这个 `workflow` 并且开始监听事件。
+
+例如我们在仓库的路径`.github/workflows/hello-world.yml`创建一个基本的 `workflow`。
+```yml
+name: GitHub Actions Demo
+run-name: Hello world from ${{ github.actor }}
+on: [push]
+jobs:
+  Hello-World-Action:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Hello world on OS ${{ runner.os }}"
+      - run: echo "Triggered by ${{ github.event_name }} event."
+      - run: echo "Exit with status ${{ job.status }}."
+```
+只要把它放在对应的位置，在每次 push 时这个 Workflow 就会触发。除了 `push`, `pull`, `merge` 等 GitHub 事件以外，也可以设定按周期自动运行。因此也有人拿它做爬虫或者自动签到之类的，不过这可能有滥用的嫌疑。
+
+我们可以在仓库的 Actions 页面看到 `workflow` 的的运行情况。
+
+![github-actions-example](/static/images/github-actions-example.png)
+
+可以发现，Github Actions 的一些功能和 Jenkins 等部署系统很像，这里简单对比一下。
+
+| 方面             | Github Actions                         | Jenkins                                        |
+| ---------------- | -------------------------------------- | ---------------------------------------------- |
+| **主体**         | 由GitHub官方提供的CI/CD工具            | 开源社区维护的持续集成和持续部署工具。         |
+| **安装部署**     | 无需安装。也提供自建服务器的功能。     | 需要独立安装并在服务器上配置。                 |
+| **价格**         | 公共仓库免费的，私有仓库有分钟数限制。 | 完全免费，但有额外硬件成本。                   |
+| **平台支持**     | 支持各种主流操作系统和平台。           | 可以在任何支持Java的平台上运行                 |
+| **UI和用户体验** | 现代化的UI，与GitHub深度集成。         | UI相对较老，但功能强大，可能需要一些学习曲线。 |
+
+
+## 概念解释
+### [Workflows](https://docs.github.com/en/actions/using-workflows)
+
+一个 `workflow` 就是一个自动化任务的整个流程，它由一个或多个 `job` 组成，由 `event` 触发。`workflow` 也可以包含其他的 `workflow`。要创建一个 `workflow`，只需在仓库的 `.github/workflows` 目录下新建一个 `*.yml` 文件。
+
+### [Events](https://docs.github.com/en/actions/using-workflows/events-that-trigger-workflows)
+
+一个 `event` 就是能够触发 `workflow` 的事件。一般是对仓库进行某些操作，例如 push，pull request，issue。但是也可以通过官方的 [REST API](https://docs.github.com/en/rest/repos#create-a-repository-dispatch-event) 来手动触发。
+
+
+### [Jobs](https://docs.github.com/en/actions/using-jobs)
+
+一个 `job` 就是 `workflow` 的一个步骤，它由一系列的 `step` 组成。这些 `step` 都是在同一个 `runner` 上运行，所以互相之间可以共享数据。
+
+你可以把一系列 `step` 想象成在同一台机器上顺序执行的命令，你也可以使用其他人写好的 `action` 来作为 `step`，例如：
+
+```yml
+name: GitHub Actions Demo
+run-name: Example workflow using an action
+on: [push]
+jobs:
+  Example-Action:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: '12'
+      - run: npm install
+      - run: npm test
+```
+
+这个 `workflow` 会在每次 push 时触发，然后在 `ubuntu-latest` 上运行一系列 `step`，这些 `step` 都是使用其他人写好的 `action` `actions/checkout@v3` 会把仓库的代码检出到 `ubuntu-latest` 上。`actions/setup-node@v3` 则会安装 `node` 环境。
+
+默认情况下，同一个 `workflow` 的 `job` 是并行执行的，但是也可以互相设置依赖来线性执行，如：
+```yml
+jobs:
+  job1:
+  job2:
+    needs: job1
+  job3:
+    needs: [job1, job2]
+```
+
+### [Actions](https://docs.github.com/en/actions/creating-actions)
+
+一个 `action` 是一系列动作的合集，例如上文的 `actions/checkout@v3` 和 `actions/setup-node@v3` 就是两个 `action`。一般对于常用的操作，我们可以直接使用其他人写好的 `action`，也可以自己创建 `action`。
+
+在官方提供的 [marketplace](https://github.com/marketplace?type=actions) 上可以查看编写好的 `action`。
+
+![Marketplace](/static/images/github-actions-marketplace.png)
+
+
+### [Runners](https://docs.github.com/en/actions/using-github-hosted-runners/about-github-hosted-runners)
+
+一个 `runner` 就是运行 `workflow` 的机器（估计是一个虚拟容器），每次 `workflow` 都会在一个新的 `runner` 上运行。GitHub 官方提供了不同系统下的 `runner`，通过 `runs-on` 来指定。
+
+```yml
+jobs:
+  job1:
+    runs-on: ubuntu-latest
+  job2:
+    runs-on: windows-latest
+  job3:
+    runs-on: macos-latest
+```
+
+默认的 `runner` 配置如下[^2]：
+
+[^2]: 具体配置可能会发生变化，参考[官方文档](https://docs.github.com/en/actions/using-github-hosted-runners/about-github-hosted-runners#supported-runners-and-hardware-resources)。
+
+| Type | CPU | Memory | SSD |
+| :--- | :-- | :----- | :-- |
+| Windows | 2-core | 7 GB | 14 GB |
+| Linux | 2-core | 7 GB | 14 GB |
+| macOS | 3-core | 14 GB | 14 GB |
+
+如果你需要更高的配置，可以使用官方提供的 [larger runner](https://docs.github.com/en/actions/using-github-hosted-runners/about-larger-runners#understanding-billing)，最高提供 64 核，256 GB， 2040 GB SSD 的 Windows 和 Ubuntu 配置，但是需要额外付费。 
+
+官方也提供了[自建 runner](https://docs.github.com/en/actions/hosting-your-own-runners/managing-self-hosted-runners/about-self-hosted-runners) 的功能，不过我比较怀疑如果都走到这一步了，它和传统的自动构建工具相比还有多大优势。
+
+
+## 其他
+
+### [Context](https://docs.github.com/en/actions/learn-github-actions/contexts)
+
+所谓 `context` 其实就是配置文件内可以使用的变量，例如上文中的 `${{ github.actor }}` 和 `${{ runner.os }}` 就是两个 `context` 提供的变量值。GitHub 官方提供了一系列的 `context`，如 `github`，`env`，`vars`，`job`, `steps`, `secrets` 等等，你可以在[这个页面](https://docs.github.com/en/actions/reference/context-and-expression-syntax-for-github-actions#contexts)查看详情。
+
+
+## Secrets
+
+`secrets` 是一种特殊的 `context`，由于自动化部署往往涉及到一些授权信息（数据库密码，私钥等等），我们不希望这些信息直接暴露在配置文件中，就有了 `secrets` 。要使用 `secrets`，你只需要在项目的设置页面添加对应的值，然后在脚本中使用 `${{ secrets.SECRET_NAME }}` 来引用即可。存放在 `secrets` 中的值是加密的。
+
+```yml
+name: Secret Demo
+run-name: Example workflow using secrets
+on: [push]
+jobs:
+  Example-Secret:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Secret value is ${{ secrets.SECRET_NAME }}"
+```
+
+## [Artifacts](https://docs.github.com/en/actions/learn-github-actions/essential-features-of-github-actions#sharing-data-between-jobs)
+
+我们知道同一个 `job` 中的 `step` 是运行在一台虚拟容器内，所以他们可以很方便的通过文件地址来共享数据。但是如果需要在不同的 `job` 之间共享数据，该怎么办呢？
+
+更进一步，如果我们希望任务运行完成后数据仍然可以保存和下载，又该怎么办呢？
+
+这就需要用到 `artifacts` 了，官方建议的 `artifacts` 的使用场景这么几种：
+
+1. 日志文件
+2. 测试结果，截屏等
+3. 二进制文件或者压缩文件
+4. 压力测试结果还有代码覆盖率结果
+
+`artifacts` 的使用方法很简单，只需要在 `job` 中使用 `upload-artifact` 和 `download-artifact` 来上传和下载文件即可。
+```yml
+  - name: 'Upload Artifact'
+    uses: actions/upload-artifact@v3
+    with:
+      name: my-artifact
+      path: my_file.txt
+      retention-days: 5
+```
+
+```yml
+- name: Download a single artifact
+  uses: actions/download-artifact@v3
+  with:
+    name: my-artifact
+```
+
+如果要从浏览器中下载 `artifacts`，可以在 `workflow` 的页面点击 `CodeQL` 按钮，然后点击对应的 `artifacts` 下载即可。
+
+### [Cache](https://docs.github.com/en/actions/using-workflows/caching-dependencies-to-speed-up-workflows#comparing-artifacts-and-dependency-caching)
+
+与 `artifacts` 类似，`cache` 也是一种数据持久化保存的方式，它用来保存依赖库，编译缓存文件之类的数据。如果不使用 `cache`，即使两次 `workflow` 的代码完全一样，也要重新下载安装所有依赖。合适的场景下使用 `cache` 可以大大提高 `workflow` 的运行速度。
+
+`cache` 使用起来也并不复杂，只用在操作之前调用 `actions/cache` 来下载缓存，如果对应 `key` 的缓存不存在，它便会自动将本次的结果存入相应的路径中。
+
+```yml
+- name: Cache node modules
+  uses: actions/cache@v3
+  with:
+    path: ~/.npm
+    key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+```
+
+具体用法参考[官方文档](https://docs.github.com/en/actions/using-workflows/caching-dependencies-to-speed-up-workflows)。
+
+## 总结
+
+GiHub Actions 是一个和 GitHub 深度集成的自动化部署工具，可以很方便的监听 GitHub 事件并执行操作。最重要的一点是它是免费的，而且背后是微软在撑腰，不用太担心会突然关闭。
+
+其实 GitHub Actions 也是现在 Serverless 大趋势的一个缩影，云厂商越来越倾向于提供具体的应用，而不是整机。对于云厂商来说这可以方便他们进行权限管理，资源分配和规模化，也能帮助他们提高机器利用率，降低成本。对于用户来说，也可以更加专注于自己的业务，而不用关心底层的资源管理。代价就是会更多的依赖于云厂商提供的商业服务，而不是更开放的底层服务。也不知道这是好事还是坏事。
+
+## 参考链接
+1. [GitHub Actions - Git Docs](https://docs.github.com/en/actions)
+2. [Jenkin 官方网站](https://www.jenkins.io)

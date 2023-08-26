@@ -1,0 +1,68 @@
+---
+title: 'Python 多进程并发执行'
+date: '2016-1-28'
+lastmod: '2017-7-26'
+summary: ''
+images: []
+authors: ['default']
+tags: ['python', 'multiprocessing']
+
+---
+
+## 动机
+
+由于 Python 的 GIL 限制，多线程并不能提高 CPU 密集型任务的执行效率。这时候我们可以用多进程来提高效率。
+
+## 基本多进程
+```python
+from multiprocessing import Process
+p = Process(target=run_proc, args=(arg1, arg2, etc))
+p.start()
+p.join()
+```
+最为直接的多进程执行方式，但是无法很好的控制进程数量。
+
+## 进程池：
+```python
+import multiprocessing
+manager = multiprocessing.Manager()
+queue = manager.Queue()
+pool = multiprocessing.Pool(number_of_workers)
+for i in range(number_of_workers):
+    pool.apply_async(func, (queue, ))
+pool.close()
+pool.join()
+```
+进程通过队列进行通信，进程池中的进程数量也可以控制。
+
+## map
+```python
+from multiprocessing import Pool
+# from multiprocessing.dummy import Pool as ThreadPool
+pool = Pool(4) # Sets the pool size to 4
+results = pool.map(func, argvs)
+pool.close() 
+pool.join()
+```
+如果进程之间无需通信，可以使用 map 函数。
+
+
+## 进程间通信
+```python
+# For Process
+from multiprocessing import Queue
+from multiprocessing import Process
+q = Queue()
+pw = Process(target=func, args=(q, arg1, etc))
+# ...
+
+# In func
+def func(q, arg1, etc):
+    q.put(var)
+    q.get()
+    
+    
+# For Pool
+from multiprocesing import Manager
+q = Manager().Queue()
+```
