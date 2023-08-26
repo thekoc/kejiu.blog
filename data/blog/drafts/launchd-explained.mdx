@@ -5,14 +5,13 @@ tags: ['macos', 'launchd', 'apple']
 summary: 'Launchd 简明指南 -  Mac 上最强大的后台管理工具'
 images: []
 authors: ['default']
-draft: true
 ---
 
 ## 前言
 
-之前用过几次 launchd 来管理一些后台程序，似乎可以运行，却不始终求甚解。心中也一直有一些问题，比如 launchd, crontab，systemd 是什么关系？它接受哪些命令，起什么作用？配置文件到底怎么写，有哪些选项？
+之前用过几次 launchd 来管理一些后台程序，似乎可以运行，却不始终求甚解。心中也一直还有些疑问，比如 launchd, crontab，systemd 是什么关系？它接受哪些命令，起什么作用？配置文件到底怎么写，有哪些选项？
 
-最近恰好有较全面地了解了一下 ，于是在此处纪录一下，以便日后查阅，也希望帮助到有需要的人。
+最近恰好较为全面地了解了一下 ，在此处纪录一下。
 
 ## launchd 到底是什么? 
 
@@ -27,8 +26,6 @@ draft: true
 简单来说，launchd 会在启动时扫描特定的文件夹，读取相应的配置文件，根据当前的上下文，决定是否需要立即启动，以什么权限启动，并且将这些程序纳入自己的管理范围。这些都是开机后自动完成的。
 
 作为用户，如果我们想和 launchd 交互，例如禁用或者启用某些服务，或者查看当前正在运行的服务等，就需要用到 launchctl 这个命令行工具。而如果我们想创建自己的后台服务程序，就需要自行编写配置文件，根据使用目的将它放置在正确的路径中。
-
-需要注意的是，根据苹果的设计，launchd 有“域”（domain）的概念。“域”是一个树状结构，系统的域处于根节点，属于用户的后台程序会运行在与用户绑定的子节点域中。关于这个设计，会在后文中讨论。
 
 ## 启动步骤
 
@@ -47,7 +44,9 @@ draft: true
 配置文件是一个以 `.plist` 结尾的文件，我们通过配置文件来告诉 launchd 程序何时启动，启动后做些什么。
 
 配置文件的格式和参数近年来发生了一些改变，所以网络上（甚至官方）曾经的教程都会有不准确的地方。所幸 macOS 系统自带了及时更新的[文档](x-man-page://launchd.plist)，其中详细描述了配置文件可选的各种值以及作用。你可以通过在命令行中输入 `man launchd.plist` 来查看。
-![](Screenshot%202023-08-22%20at%2010.19.17%20AM.png)
+![](/static/images/man-launchd-plist.png)
+
+
 ### 存放位置
 
 以下表格说明了存放在不同位置中的配置文件的区别。
@@ -162,6 +161,25 @@ launchd 还支持很多其他启动条件，有兴趣可以查看官方[相关�
     <string>/var/log/myjob.log</string>
 ```
 
+## `LimitLoadToSessionType`
+
+这个选项只对存放在 `LaunchAgent` 文件夹中的配置有效，它决定了程序在哪种 session 下运行。例如，如果你想要程序在图形页面登录时运行，但是不想在 ssh 登录时运行，可以设置为 `Aqua`（这是默认值）。相反，可以设置为 `StandardIO`。
+
+```xml
+    <key>LimitLoadToSessionType</key>
+    <string>Aqua</string>
+```
+
+官方提供的技术文档：
+
+|Name|Session Type|Notes|
+|---|---|---|
+|GUI launchd agent|Aqua|Has access to all GUI services; much like a login item.|
+|non-GUI launchd agent|StandardIO|Runs only in non-GUI login sessions (most notably, SSH login sessions)|
+|per-user launchd agent|Background|Runs in a context that's the parent of all contexts for a given user|
+|pre-login launchd agent|LoginWindow|Runs in the loginwindow context|
+
+
 ### 其他配置
 
 此外，也通过 `UserName` 或者 `UID` 来指定运行程序的用户（注意，这可能会涉及到权限问题）。通过 `WorkingDirectory` 来配置工作目录。通过 `RootDirectory` 来配置根目录。由于篇幅本章不详细展开，请查阅官方的 Mannual 文档。
@@ -169,23 +187,100 @@ launchd 还支持很多其他启动条件，有兴趣可以查看官方[相关�
 ## Launchctl
 
 虽然刚刚一直在说 launchd，实际上和我们打交道其实是命令行工具 `launchctl`，它们就像 Linux 中的 systemd 和 systemctl，一个是后端程序，一个是用户用来和后端交互的前端命令行页面。比如，launchd 负责管理后台进程，如果我们要手动禁止/启用/重启/查看后台进程，就需要用到 `launchctl` 命令了。
-### 旧方法 vs 新方法
-在 2016 年左右大幅改动了 launchd 的命令，传统的命令 
 
-```
+### 旧方法 vs 新方法
+在 2016 年左右大幅改动了 launchd 的命令，原来的命令
+
+```bash
     launchctl load -w <plist-file-path>
 ```
 
 被标注为不建议继续使用，取而代之的是
 
-```
+```bash
     launchctl bootstrap <domian-target> <plist-file-path>
 ```
 
-苹果为什么要
+苹果为什么要做出这个改变？其实就是为了这个新加入的参数 `<domain-target>`。
 
-### 
-# 
+在 macOS 中，运行的程序有“域”（domain）的概念。域其实就是程序运行的一个命名空间，主要用来管理权限还有隔离程序。
+
+例如，如果我们在 `/Library/LaunchAgents` 中创建了一个任务，那么每个用户登录时，这个进程应该启动。用户登出后，相应的进程应该关闭。但是如果是系统级别的后台进程，则应该在系统启动时启动，并且不会随着用户登出关闭。如果没有命名空间的话，这些不同的情况管理起来是十分困难的。因此，对于系统级应用，苹果引入了 `system` 这个域，对于通过图形页面登录的用户，后台进程则运行在 `gui` 域中。
+
+
+在普通的流程中，运行在哪个域中是系统在启动过程中自动管理的，但是由于 `launchctl load` 命令的存在，用户可以在系统已经启动后手动载入。这个时候问题就出现了，当用户运行 `launchctl load` 命令时，到底应该载入到哪个域中？之前的方法是，用户在哪个域中执行的改命令，就载入到哪个域中，如果用户用 `sudo` 命令载入的话，就在 `system` 中运行。但是如果我用 A 用户登录，却想载入到 B 用户的域中呢？或者如果我用图形页面登录，却想载入到 `ssh` 的域中呢？
+
+
+### `launchctl bootstrap` 命令
+
+旧命令 `launchctl load` 是无法主动指定的，如果使用新命令 `launchctl bootstrap`，就可以在参数 `domain-target` 中指定。`man` 文档中列出了五个域，分别是 `system`, `gui`, `login`, `user` 和 `pid`。除了这些以外，还存在别的域，但是实际上我们日常使用的只有 `system` 和 `gui`，最多加上 `user`。
+
+例如，如果我们要把载入到当前用户的域中，可以使用
+
+```bash
+    launchctl bootstrap gui/$(id -u) <plist-file-path>
+```
+
+其中 `$(id -u)` 用来获取当前用户的 UID。gui 代表图形页面。
+
+
+如果要载入到系统域中，则可以使用：
+
+```bash
+    sudo launchctl bootstrap system <plist-file-path>
+```
+
+一般而言，我们要么载入到当前用户的域中，要么载入到系统域中，所以大部分情况下这两个命令就够用了。你也可以加载到其他用户的域中，例如：
+
+```bash
+    sudo launchctl bootstrap user/502 <plist-file-path>
+```
+
+### `launchctl bootout` 命令
+
+除了 `launchctl load` 以外，原本的 `launchctl unload` 也被 `launchctl bootout` 替代。用法类似，例如：
+
+```bash
+    launchctl bootout <domain-target>/<service-id>
+```
+
+例如：
+    
+```bash
+    launchctl bootout gui/$(id -u)/com.example.touchsomefile
+```
+
+注意，用 `launchctl bootout` 命令卸载的程序，下次重启以后还是会被自动载入。如果想要禁止自动载入，需要使用 `launchctl disable` 命令。
+
+```bash
+    launchctl disable <domain-target>/<service-id>
+```
+
+### `launchctl print` 命令
+
+这个命令是用来替换原来的 `launchctl list` 命令的。使用的时候也需要指定域，例如：
+
+```bash
+    launchctl print gui/$(id -u)
+```
+
+会显示当前登录用户的所有后台进程。不过要注意，输出的格式并不能保证会一直不变，引用官方的说明：
+
+> IMPORTANT: This output is NOT API in any sense at all. Do NOT rely on the structure or information emitted for ANY reason. It may change from release to release without warning.
+
+
+这里还要详细说明一下，域是有层次关系的，例如 `system` 作为最顶级的域，下面有每个用户对应的 `user` 域，再之下又有 `login` 域，代表的是用户每次登录的 session，例如 `gui/501` 代表的是用户 501 通过图形登录的 session。而他们之间的读取权限关系是，子域可以读取父域的服务，但是父域不能读取子域的服务，同级之间也不能互相看到运行的服务。例如 `launchctl print gui/501` 会打印出系统级的服务，但是 `launchctl print system` 不会打印出用户级的服务。
+
+
+### 其他命令
+
+如果想要强制重启某个服务，可以使用 `launchctl kickstart` 命令。
+
+```bash
+    launchctl kickstart -k <domain-target>/<service-id>
+```
+
+·
 
 ## 参考资料
 1. [Man Page](https://ss64.com/osx/launchctl.html)
@@ -197,3 +292,4 @@ launchd 还支持很多其他启动条件，有兴趣可以查看官方[相关�
 7. [Daemons and Agents](https://developer.apple.com/library/archive/technotes/tn2083/_index.html#//apple_ref/doc/uid/DTS10003794)
 8. [What is service-target](https://developer.apple.com/forums/thread/16206)
 9.  [launchd: Confusion on semantics of bootstrap and bootout etc. after reading manual pages](https://apple.stackexchange.com/questions/366281/launchd-confusion-on-semantics-of-bootstrap-and-bootout-etc-after-reading-manu)
+10. [Bootstrap Contexts](https://developer.apple.com/library/archive/documentation/Darwin/Conceptual/KernelProgramming/contexts/contexts.html#//apple_ref/doc/uid/TP30000905-CH212-BEHJDFCA)    
