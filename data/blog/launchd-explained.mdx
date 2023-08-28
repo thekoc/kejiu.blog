@@ -2,7 +2,7 @@
 title: 'Launchd 简明指南 -  Mac 上最强大的后台管理工具'
 date: '2023-08-12'
 tags: ['macos', 'launchd', 'apple']
-summary: 'Launchd 简明指南 -  Mac 上最强大的后台管理工具'
+summary: '🚀 Launchd 的基本概念和实际应用'
 images: []
 authors: ['default']
 ---
@@ -15,9 +15,9 @@ authors: ['default']
 
 ## launchd 到底是什么? 
 
-简单来说，launchd 是一个 macOS 上的后台服务管理进程。例如网络进程，文件系统，Finder等等都是由它来启动和管理的。并且它不仅仅是一个后台服务管理进程（如 Supervisord 和 Crontab），它还是一个 init 程序，是系统启动后运行的第个进程（PID 为 1），因此也就在系统中有着特殊的地位。如今 Linux 系统中较流行的 init 程序 systemd 受到过  launchd 的启发。
+简单来说，launchd 是一个 macOS 上的后台服务管理进程。例如网络进程，文件系统，Finder等等都是由它来启动和管理的。并且它不仅仅是一个后台服务管理进程（如 Supervisord 和 Crontab），它还是一个 init 程序，是系统启动后运行的第个进程（PID 为 1），因此也就在系统中有着特殊的地位。Linux 系统中现如今流行的 init 程序，systemd，其实也受到 launchd 的启发。
 
-作为一个系统级进程，本身它不会带来什么性能损耗，却着非常强大的功能和配置选项。唯一的缺点就是——有些复杂。繁杂的功能项，XML 格式的配置文件（我**太爱** XML 了，只可惜 systemd 的配置文件没有用这个格式），官方 2016 年对旧命令的更改，都增加了它的理解难度。
+作为系统级进程，launchd 几乎不会带来性能损耗，却着非常强大的功能和配置选项。唯一的缺点就是——有些复杂。繁杂的功能项，XML 格式的配置文件（我**太爱** XML 了），官方 2016 年对旧命令的更变，都增加了它的理解难度。
 
 除了这个“小小”的缺点外，可以说launchd 是居家旅行，必备工具了。
 
@@ -119,9 +119,9 @@ authors: ['default']
         <key>Day</key>
         <integer>7</integer>
         <key>Weekday</key>
-        <integeer>1</integer>
+        <integer>1</integer>
         <key>Month</key>
-        <integeer>12</integer>
+        <integer>12</integer>
     </dict>
 
 ```
@@ -288,7 +288,7 @@ launchd 还支持很多其他启动条件，有兴趣可以查看[官方文档](
 
 ## 总结
 
-launchd 和 launchctl 常见的用法就是这些了。由于这两个组件实在是太过复杂，还有很多用法和细节没有提及，这些可以参考系统内置的 `man` 页面。如果你想更深入了解系统的底层架构，下面有一些官方参考资料从系统层面做了一些较深入的解释。
+launchd 和 launchctl 常见的用法就是这些了。 由于这两个组件实在是太过复杂，还有很多用法和细节没有提及，这些可以参考系统内置的 `man` 页面。如果你想更深入了解系统的底层架构，下面有一些官方参考资料从系统层面做了一些较深入的解释。
 
 ## 参考资料
 1. [Man Page](https://ss64.com/osx/launchctl.html)

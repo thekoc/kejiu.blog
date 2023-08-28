@@ -8,4 +8,70 @@ authors: ['default']
 draft: true
 ---
 
-## 1. 安装 KeepAlived
+## 什么是高可用（HA）
+
+让我们先来看看[维基百科](https://zh.wikipedia.org/zh-hans/高可用性)上的定义：
+
+> 高可用性（英语：high availability，缩写为HA），IT术语，指系统无中断地执行其功能的能力，代表系统的可用性程度。 是进行系统设计时的准则之一。 高可用性系统与构成该系统的各个组件相比可以更长时间运行。 高可用性通常通过提高系统的容错能力来实现。
+
+简单来说，高可用性就是说一个系统可以在很长一段时间内不间断地运行，不会因为某个组件的故障而导致整个系统不可用。
+
+## 实现高可用的几种方法
+
+（介绍不同方法和对比表格）
+
+## KeepAlived 是什么
+
+### KeepAlived 简介
+
+### KeepAlived 解决了什么问题
+
+## 实战配置
+
+（主机A配置文件）
+
+```
+vrrp_instance VI_1 {
+
+        state MASTER
+        interface ens192
+        virtual_router_id 51
+        priority 255
+        advert_int 1
+        authentication {
+              auth_type PASS
+              auth_pass 9$4S9jJ6
+        }
+        virtual_ipaddress {
+              192.168.114.25
+        }
+}
+```
+
+（主机B配置文件）
+```
+vrrp_instance VI_1 {
+
+        state BACKUP
+        interface ens192
+        virtual_router_id 51
+        priority 254
+        advert_int 1
+        authentication {
+              auth_type PASS
+              auth_pass 9$4S9jJ6
+        }
+        virtual_ipaddress {
+              192.168.114.25
+        }
+}
+```
+
+（解释）
+
+## 自定义健康检查脚本
+
+## KeepAlived 原理浅析
+
+## 总结
+

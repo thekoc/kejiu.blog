@@ -1,0 +1,243 @@
+---
+title: 'Systemd 使用不完全指北'
+date: '2023-08-30'
+tags: ['systemd', 'devops', 'linux']
+summary: '不完全、不官方、不全面的 Systemd 使用指北'
+images: []
+authors: ['default']
+---
+
+## 前言
+
+之前的[一篇文章](/blog/launchd-explained)介绍了一下 macOS 的 `launchd`，这次就来介绍一下 Linux 上的 counterpart：`systemd`。
+
+几年前，`systemd` 出现的时候还引起了很大的争议，大家的理由无非是“违反 Unix 哲学”，“邪恶的红帽正在侵蚀 Linux”，“systemd 想要接管一切”等等。但是，几年后的今天，主流 Linux 发行版的默认 init 系统都已经变成 `systemd`（以下表格节选自[维基百科](https://en.wikipedia.org/wiki/Systemd)）。只能说真香定律永不过时……
+
+
+|Linux distribution|Enabled by default?|Date released as default|
+|---|---|---|
+|[Android](https://en.wikipedia.org/wiki/Android_(operating_system) "Android (operating system)")|No|—|
+|[Arch Linux](https://en.wikipedia.org/wiki/Arch_Linux "Arch Linux")|Yes|October 2012[[71]](https://en.wikipedia.org/wiki/Systemd#cite_note-arch-systemd-72)|
+|[CentOS](https://en.wikipedia.org/wiki/CentOS "CentOS")|Yes|July 2014 (v7.0)|
+|[Debian](https://en.wikipedia.org/wiki/Debian "Debian")|Yes|April 2015 (v8.0)[[75]](https://en.wikipedia.org/wiki/Systemd#cite_note-ctte-20140211-76)|
+|[Fedora Linux](https://en.wikipedia.org/wiki/Fedora_Linux "Fedora Linux")|Yes|May 2011 (v15)|
+|[Gentoo Linux](https://en.wikipedia.org/wiki/Gentoo_Linux "Gentoo Linux")[[b]](https://en.wikipedia.org/wiki/Systemd#cite_note-81)|No|—|
+|[Linux Mint](https://en.wikipedia.org/wiki/Linux_Mint "Linux Mint")|Yes|August 2018(LMDE 3)|
+|[Manjaro Linux](https://en.wikipedia.org/wiki/Manjaro_Linux "Manjaro Linux")|Yes|November 2013|
+|[openSUSE](https://en.wikipedia.org/wiki/OpenSUSE "OpenSUSE")|Yes|September 2012(v12.2)[[89]](https://en.wikipedia.org/wiki/Systemd#cite_note-AutoWR-1-91)|
+|[Red Hat Enterprise Linux](https://en.wikipedia.org/wiki/Red_Hat_Enterprise_Linux "Red Hat Enterprise Linux")|Yes|June 2014(v7.0)|
+|[SUSE Linux Enterprise Server](https://en.wikipedia.org/wiki/SUSE_Linux_Enterprise_Server "SUSE Linux Enterprise Server")|Yes|October 2014(v12)|
+|[Ubuntu](https://en.wikipedia.org/wiki/Ubuntu_(operating_system) "Ubuntu (operating system)")|Yes|April 2015(v15.04)|
+
+## 配置文件路径
+
+和 `launchd` 一样，`systemd` 的配置文件也可以放在不同的路径。一般而言，如果要新建系统级别的后台任务，那么配置文件应该放在 `/etc/systemd/system` 下，如果是用户级别的后台任务，那么配置文件应该放在 `~/.config/systemd/user` 下。除了这两个位置还存在很多其他位置，如果你想了解的话，下面引用了 `systemd.unit(5)` 操作手册的表格：
+
+
+```
+       Table 1.  Load path when running in system mode (--system).
+       ┌──────────────────────────────┬──────────────────────────┐
+       │Path                          │ Description              │
+       ├──────────────────────────────┼──────────────────────────┤
+       │/etc/systemd/system.control   │ Persistent and transient │
+       ├──────────────────────────────┤ configuration created    │
+       │/run/systemd/system.control   │ using the dbus API       │
+       ├──────────────────────────────┼──────────────────────────┤
+       │/run/systemd/transient        │ Dynamic configuration    │
+       │                              │ for transient units      │
+       ├──────────────────────────────┼──────────────────────────┤
+       │/run/systemd/generator.early  │ Generated units with     │
+       │                              │ high priority (see       │
+       │                              │ early-dir in             │
+       │                              │ systemd.generator(7))    │
+       ├──────────────────────────────┼──────────────────────────┤
+       │/etc/systemd/system           │ System units created by  │
+       │                              │ the administrator        │
+       ├──────────────────────────────┼──────────────────────────┤
+       │/run/systemd/system           │ Runtime units            │
+       ├──────────────────────────────┼──────────────────────────┤
+       │/run/systemd/generator        │ Generated units with     │
+       │                              │ medium priority (see     │
+       │                              │ normal-dir in            │
+       │                              │ systemd.generator(7))    │
+       ├──────────────────────────────┼──────────────────────────┤
+       │/usr/local/lib/systemd/system │ System units installed   │
+       │                              │ by the administrator     │
+       ├──────────────────────────────┼──────────────────────────┤
+       │/usr/lib/systemd/system       │ System units installed   │
+       │                              │ by the distribution      │
+       │                              │ package manager          │
+       ├──────────────────────────────┼──────────────────────────┤
+       │/run/systemd/generator.late   │ Generated units with low │
+       │                              │ priority (see late-dir   │
+       │                              │ in systemd.generator(7)) │
+       └──────────────────────────────┴──────────────────────────┘
+
+       Table 2.  Load path when running in user mode (--user).
+       ┌─────────────────────────────────────────┬──────────────────────────┐
+       │Path                                     │ Description              │
+       ├─────────────────────────────────────────┼──────────────────────────┤
+       │$XDG_CONFIG_HOME/systemd/user.control    │ Persistent and transient │
+       │or                                       │ configuration created    │
+       │~/.config/systemd/user.control           │ using the dbus API       │
+       ├─────────────────────────────────────────┤ ($XDG_CONFIG_HOME is     │
+       │$XDG_RUNTIME_DIR/systemd/user.control    │ used if set, ~/.config   │
+       │                                         │ otherwise)               │
+       ├─────────────────────────────────────────┼──────────────────────────┤
+       │$XDG_RUNTIME_DIR/systemd/transient       │ Dynamic configuration    │
+       │                                         │ for transient units      │
+       ├─────────────────────────────────────────┼──────────────────────────┤
+       │$XDG_RUNTIME_DIR/systemd/generator.early │ Generated units with     │
+       │                                         │ high priority (see       │
+       │                                         │ early-dir in             │
+       │                                         │ systemd.generator(7))    │
+       ├─────────────────────────────────────────┼──────────────────────────┤
+       │$XDG_CONFIG_HOME/systemd/user or         │ User configuration       │
+       │$HOME/.config/systemd/user               │ ($XDG_CONFIG_HOME is     │
+       │                                         │ used if set, ~/.config   │
+       │                                         │ otherwise)               │
+       ├─────────────────────────────────────────┼──────────────────────────┤
+       │$XDG_CONFIG_DIRS/systemd/user or         │ Additional configuration │
+       │/etc/xdg/systemd/user                    │ directories as specified │
+       │                                         │ by the XDG base          │
+       │                                         │ directory specification  │
+       │                                         │ ($XDG_CONFIG_DIRS is     │
+       │                                         │ used if set, /etc/xdg    │
+       │                                         │ otherwise)               │
+       ├─────────────────────────────────────────┼──────────────────────────┤
+       │/etc/systemd/user                        │ User units created by    │
+       │                                         │ the administrator        │
+       ├─────────────────────────────────────────┼──────────────────────────┤
+       │$XDG_RUNTIME_DIR/systemd/user            │ Runtime units (only used │
+       │                                         │ when $XDG_RUNTIME_DIR is │
+       │                                         │ set)                     │
+       ├─────────────────────────────────────────┼──────────────────────────┤
+       │/run/systemd/user                        │ Runtime units            │
+       ├─────────────────────────────────────────┼──────────────────────────┤
+       │$XDG_RUNTIME_DIR/systemd/generator       │ Generated units with     │
+       │                                         │ medium priority (see     │
+       │                                         │ normal-dir in            │
+       │                                         │ systemd.generator(7))    │
+       ├─────────────────────────────────────────┼──────────────────────────┤
+       │$XDG_DATA_HOME/systemd/user or           │ Units of packages that   │
+       │$HOME/.local/share/systemd/user          │ have been installed in   │
+       │                                         │ the home directory       │
+       │                                         │ ($XDG_DATA_HOME is used  │
+       │                                         │ if set, ~/.local/share   │
+       │                                         │ otherwise)               │
+       ├─────────────────────────────────────────┼──────────────────────────┤
+       │$XDG_DATA_DIRS/systemd/user or           │ Additional data          │
+       │/usr/local/share/systemd/user and        │ directories as specified │
+       │/usr/share/systemd/user                  │ by the XDG base          │
+       │                                         │ directory specification  │
+       │                                         │ ($XDG_DATA_DIRS is used  │
+       │                                         │ if set, /usr/local/share │
+       │                                         │ and /usr/share           │
+       │                                         │ otherwise)               │
+       ├─────────────────────────────────────────┼──────────────────────────┤
+       │$dir/systemd/user for each $dir in       │ Additional locations for │
+       │$XDG_DATA_DIRS                           │ installed user units,    │
+       │                                         │ one for each entry in    │
+       │                                         │ $XDG_DATA_DIRS           │
+       ├─────────────────────────────────────────┼──────────────────────────┤
+       │/usr/local/lib/systemd/user              │ User units installed by  │
+       │                                         │ the administrator        │
+       ├─────────────────────────────────────────┼──────────────────────────┤
+       │/usr/lib/systemd/user                    │ User units installed by  │
+       │                                         │ the distribution package │
+       │                                         │ manager                  │
+       ├─────────────────────────────────────────┼──────────────────────────┤
+       │$XDG_RUNTIME_DIR/systemd/generator.late  │ Generated units with low │
+       │                                         │ priority (see late-dir   │
+       │                                         │ in systemd.generator(7)) │
+       └─────────────────────────────────────────┴──────────────────────────┘
+```
+
+## 配置文件格式
+
+在 `systemd` 中，一个 `unit` 代表其管理的和操作的单元，例如一个后台服务、一个文件系统挂载点、一个网络接口等等。每个 `unit` 都有一个对应的配置文件，`systemd` 根据配置文件的后缀名决定 `unit` 的类型。最常用的 `unit` 类型是 `service`，代表了运行在服务器上的后台服务和应用。其他的类型包括 `socket`, `device`, `mount` 等等，详细的说明可以在对应的操作手册中查看，例如 `man systemd.socket`。
+
+一个简单的 `service` 类型配置文件是这个样子：
+
+```ini
+[Unit]
+Description=My Service
+
+[Service]
+ExecStart=/usr/local/bin/my-service
+
+
+[Install]
+WantedBy=multi-user.target
+```
+
+如果把这个配置文件命名为 `myservice.service`，那么 `systemctl enable myservice.service` 就会创建一个软链接到 `/etc/systemd/system/multi-user.target.wants/myservice.service`，这样当系统启动到 `multi-user.target` 的时候，`systemd` 就会自动加载 `myservice.service`。
+
+这里提到了一个 `target` 的概念，`target` 可以看作 `unit` 的一个同步点，`systemd` 会在启动的时候按照依赖关系加载 `target` 和与之关联的 `unit`。你可以通过：
+```bash
+systemctl list-units --type=target
+```
+
+来查看当前系统中有哪些 `target`。几个常用的 `target` 是：
+
+- `default.target`: `systemd` 默认使用这个 `target` 来启动系统，对于服务器来说一般是 `multi-user.target` 的别名，可以用 ` systemctl get-default` 查看具体的值。
+- `multi-user.target`：多用户系统启动的 `target`，一般是不带图形界面的服务器模式。
+- `graphical.target`：图形界面的启动 `target`。
+- `reboot.target`：系统重启。
+
+这里只是简单的介绍了一下 `systemd` 的配置文件格式，更详细的说明可以在命令行中输入 `man systemd.unit` 来查看。
+
+## 常用命令
+
+### 加载、启动、停止、重启、重载配置文件
+
+```bash
+systemctl enable example.service # 通过符号连接将配置文件加载到 [Install] 部分指定的 target 中
+systemctl disable example.service # 从 [Install] 部分指定的 target 中移除配置文件
+systemctl start example.service # 启动服务
+systemctl stop example.service # 停止服务
+systemctl restart example.service # 重启服务
+systemctl reload example.service # 重载配置文件
+systemctl mask nginx.service # 禁止服务启动
+```
+
+### 查看服务状态
+
+```bash
+systemctl status example.service # 查看服务状态
+systemctl is-enabled example.service # 查看服务是否处于启用状态
+systemctl is-active example.service # 查看服务是否处于激活状态
+systemctl list-units --type=service # 查看所有服务的状态
+systemctl cat example.service # 查看服务的配置文件的内容
+systemctl list-dependencies sshd.service # 查看服务的依赖关系
+
+```
+
+
+### 查看日志
+
+`systemd` 套件中自带了一个日志管理系统 `journald`，可以通过 `journalctl` 命令来查看日志。
+
+```bash
+journalctl # 查看所有日志
+journalctl -b # 查看当前系统启动后产生的日志
+journalctl -u example.service # 查看 example.service 的日志
+journalctl -u example.service --since today # 查看 example.service 今天产生的日志
+journalctl -u example.service --since "2023-08-30 00:00:00" --until "2023-08-31 00:00:00" # 查看 example.service 在 指定时间内
+journalctl -f # 实时查看日志
+journalctl --disk-usage # 查看日志占用的磁盘空间
+journalctl --vacuum-size=1G # 删除日志，直到占用的空间小于 1G
+```
+
+
+---
+
+## 参考资料
+
+1. [Managing systemd targets with systemctl](https://documentation.suse.com/smart/systems-management/html/)reference-managing-systemd-targets-systemctl/index.html)
+2. [Systemd 入门教程：命令篇](https://www.ruanyifeng.com/blog/2016/03/systemd-tutorial-commands.html)
+3. [Understanding Systemd Units and Unit Files](https://www.digitalocean.com/community/tutorials/understanding-systemd-units-and-unit-files)
+4. [systemd.unit(5) — Linux manual page](https://man7.org/linux/man-pages/man5/systemd.unit.5.html)
+5. [How To Use Systemctl to Manage Systemd Services and Units
+](https://www.digitalocean.com/community/tutorials/how-to-use-systemctl-to-manage-systemd-services-and-units)
+6. [How To Use Journalctl to View and Manipulate Systemd Logs](https://www.digitalocean.com/community/tutorials/how-to-use-journalctl-to-view-and-manipulate-systemd-logs)
