@@ -2,7 +2,7 @@
 title: 'Systemd 使用不完全指北'
 date: '2023-08-30'
 tags: ['systemd', 'devops', 'linux']
-summary: '不完全、不官方、不全面的 Systemd 使用指北 🧭'
+summary: ' 🧭不完全、不官方、不全面的 Systemd 使用指北'
 images: []
 authors: ['default']
 ---
@@ -198,6 +198,7 @@ systemctl start example.service # 启动服务
 systemctl stop example.service # 停止服务
 systemctl restart example.service # 重启服务
 systemctl reload example.service # 重载配置文件
+systemctl daemon-reload # 重载所有配置文件
 systemctl mask nginx.service # 禁止服务启动
 ```
 
