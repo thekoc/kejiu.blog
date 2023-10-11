@@ -1,0 +1,142 @@
+---
+title: '如何将软件添加到Homebrew的默认源中?'
+date: '2023-10-8'
+tags: ['macos', 'homebrew', 'github']
+summary: ''
+images: []
+authors: ['default']
+---
+
+## 前言
+
+如果你不巧是 macOS 用户, 接着又不巧有一定的编程经验，那么大概你也不巧会知道 Homebrew，一个第三方 Mac 包管理软件。网络上对于 Homebrew 本身的介绍很多，但这篇文章不是关于如何“使用” Homebrew 的，而是关于如何将一个软件添加到 Homebrew 的默认源中。
+
+## Homebrew 的默认源
+Homebrew 使用起来非常简单，譬如，如果你要安装 `weget` 命令：
+
+```bash
+brew install wget
+```
+
+Homebrew 接着就会将软件自动安装到对应目录。那么 Homebrew 是如何知道 `wget` 的下载链接的呢？又是如何知道 `wget` 是如何安装的呢？废话不多说，除去一堆复杂的 CI/CD 自动化流程，所有 Homebrew 默认的包的来源就是这个 Github 仓库：
+
+> [Homebrew/homebrew-core](https://github.com/Homebrew/homebrew-core)
+
+所以如果你想将一个新的软件添加到默认源中，你本质上需要做的就是向这个仓库提 PR 请求。
+
+这里说一下 Homebrew（原则上）对于添加到默认源中软件的一些要求，更详细的请查看官方的文档：[Acceptable Formulae - Homebrew Documentation](https://docs.brew.sh/Acceptable-Formulae)
+
+1. 软件不应该进行自我更新
+2. 软件应该是以源代码形式发放（而不是二进制）
+3. 软件的开源协议需要满足 [Debian Free Software Guidelines license](https://wiki.debian.org/DFSGLicenses)
+4. 软件需要能在最新的稳定 Xcode Clang 中编译
+5. 软件最好不要编译出一个图形程序或者 `.app` 程序。
+6. 以上一切都不是强制性要求。（Sometimes there are exceptions
+Even if all criteria are met we may not accept the formula. Documentation tends to lag behind current decision-making. Although some rejections may seem arbitrary or strange they are based on years of experience making Homebrew work acceptably for our users.)
+
+
+## Formula 文件
+刚刚提到，所有 Homebrew 默认的包的来源就是这个 [Github 仓库](https://github.com/Homebrew/homebrew-core)，更具体地说，是来自于该仓库 `homebrew-core/Formula/` 文件夹中的
+`*.rb` 文件。这个文件本质上是一个 `ruby` 的一个类的定义文件，但是这里也可以看作一个配置文件。以下是一个示例：
+```ruby
+class Foo < Formula
+  desc ""
+  homepage ""
+  url "https://example.com/foo-0.1.tar.gz"
+  sha256 "85cc828a96735bdafcf29eb6291ca91bac846579bcef7308536e0c875d6c81d7"
+  license ""
+
+  # depends_on "cmake" => :build
+
+  def install
+    # ENV.deparallelize
+    system "./configure", *std_configure_args, "--disable-silent-rules"
+    # system "cmake", "-S", ".", "-B", "build", *std_cmake_args
+    system "make", "install"
+  end
+
+  test do
+    system "false"
+  end
+end
+```
+
+这里是详细的字段定义：https://rubydoc.brew.sh/Formula#resource-class_method
+
+Homebrew 提供了一些通用的模板，通过命令 `brew create <URL>` 生成，其中 `<URL>` 为一个 `zip` 或者 `tarball` ，同时这个命令也能根据对应语言来生成模板，例如：`brew create --go https://example.com/foo-0.1.tar.gz` 会生成这样一个配置文件:
+
+```ruby
+
+# Documentation: https://docs.brew.sh/Formula-Cookbook
+#                https://rubydoc.brew.sh/Formula
+# PLEASE REMOVE ALL GENERATED COMMENTS BEFORE SUBMITTING YOUR PULL REQUEST!
+class Foo < Formula
+  desc ""
+  homepage ""
+  url "https://example.com/foo-0.1.tar.gz"
+  sha256 "0048002955d674583b0b7b05771a81341e2a5a15e2e4e9fb09c11814f984b617"
+  license ""
+
+  depends_on "go" => :build
+
+  def install
+    # ENV.deparallelize  # if your formula fails when building in parallel
+    system "go", "build", *std_go_args(ldflags: "-s -w")
+  end
+
+  test do
+    # `test do` will create, run in and delete a temporary directory.
+    #
+    # This test will fail and we won't accept that! For Homebrew/homebrew-core
+    # this will need to be a test that verifies the functionality of the
+    # software. Run the test with `brew test telegram-downloader`. Options passed
+    # to `brew install` such as `--HEAD` also need to be provided to `brew test`.
+    #
+    # The installed folder is not in the path, so use the entire path to any
+    # executables being tested: `system "#{bin}/program", "do", "something"`.
+    system "false"
+  end
+end
+```
+
+使用 `go build` 命令编译完成后，Homebrew 会把编译后的文件复制到 `$(brew --cellar)` 目录下，并且在系统的 `PATH` 下建立相应的符号连接。
+
+
+## 发布 Formula
+
+在 Homebrew 上发布包的完整步骤其实就是
+1. 在 Github 上 Fork [homebrew-core](https://github.com/Homebrew/homebrew-core)
+2. 在 `homebrew-core/Formula/` 文件夹中添加新的 Formula
+3. 发起 Pull Request 请求并且等待通过
+
+
+不过，为了方便 Formula 的生成和更新，以及确保编译安装过程没有错误，Homebrew 提供了一些命令和方法。
+
+例如刚刚提到的
+```bash
+brew create <URL>
+```
+
+可以快速的创建 Formula 模板。
+
+```bash
+brew audit --new-formula <formula> tests
+```
+
+用来测试新建的 Formula 是否满足要求。
+
+```bash
+brew bump-formula-pr
+```
+
+则是用来更新已经存在的 Formula。
+
+
+--- 
+
+## 参考资料
+1. [Adding Software To Homebrew](https://docs.brew.sh/Adding-Software-to-Homebrew)
+2. [brew(1) – The Missing Package Manager for macOS (or Linux)](https://docs.brew.sh/Manpage#create-options-url)
+3. [Formula Cookbook](https://docs.brew.sh/Formula-Cookbook)
+4. [How to Open a Homebrew Pull Request
+](https://docs.brew.sh/How-To-Open-a-Homebrew-Pull-Request#formulae-related-pull-request)
